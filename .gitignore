@@ -1,0 +1,16 @@
+# 密钥 / 本地配置
+*.keystore
+/release.keystore
+local.properties
+
+# 构建产物
+/build/
+.gradle/
+app/build/
+captures/
+
+# 网页引擎代码（已预置并提交进仓库，作为 APK 内容；更新时重跑 scripts/build.py 后重新提交）
+# /app/src/main/assets/web/  **需要提交**
+
+# 资源包（本地生成的大文件，勿提交；由你手动上传到 GitHub Release，App 运行时按需下载）
+build/pack/
