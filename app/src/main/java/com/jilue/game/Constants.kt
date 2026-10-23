@@ -9,7 +9,7 @@ object Constants {
     const val PORT = 8080
 
     /** 资源包所在的 GitHub 仓库拥有者（改为你自己的用户名/组织） */
-    const val DEFAULT_OWNER = "YOUR_GITHUB_USER"
+    const val DEFAULT_OWNER = "zhousanshao"
 
     /** 资源包所在的 GitHub 仓库名（Release 里需含 assets.zip + manifest.json） */
     const val DEFAULT_REPO = "jilue-android"
