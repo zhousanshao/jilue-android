@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="#10141c">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_repo_label"
+        android:textColor="#d4af37"
+        android:textSize="14sp" />
+
+    <EditText
+        android:id="@+id/ownerEdit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:hint="@string/settings_owner_hint"
+        android:textColor="#e8e8e8"
+        android:textColorHint="#888"
+        android:inputType="textUri" />
+
+    <EditText
+        android:id="@+id/repoEdit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="@string/settings_repo_hint"
+        android:textColor="#e8e8e8"
+        android:textColorHint="#888"
+        android:inputType="textUri" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="@string/settings_base_label"
+        android:textColor="#d4af37"
+        android:textSize="14sp" />
+
+    <EditText
+        android:id="@+id/baseUrlEdit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:hint="@string/settings_base_hint"
+        android:textColor="#e8e8e8"
+        android:textColorHint="#888"
+        android:inputType="textUri" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/settings_help"
+        android:textColor="#9aa0a8"
+        android:textSize="12sp"
+        android:lineSpacingExtra="3dp" />
+
+    <Button
+        android:id="@+id/saveBtn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="@string/settings_save" />
+
+    <Button
+        android:id="@+id/clearBtn"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/settings_clear" />
+
+</LinearLayout>

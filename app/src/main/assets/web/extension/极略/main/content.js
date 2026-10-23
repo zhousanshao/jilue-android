@@ -1,0 +1,334 @@
+import { lib, game, ui, get, ai, _status } from "../../../noname.js";
+export async function content(config, pack) {
+	console.time(_status.extension);
+	//版本检测 and 更新公告
+	if (pack.changelog) {
+		var testCode = `\
+				let a = 1;
+				const b = 1;
+				(() => a + b)();`;
+		try {
+			eval(testCode);
+		} catch (error) {
+			if (!game.getExtensionConfig(`极略`, "compatibilityAlert")) {
+				game.saveExtensionConfig("极略", "compatibilityAlert", true);
+				alert("极略与你的设备或是无名杀版本不兼容", "极略");
+			}
+			pack.changelog = `<span style="font-weight:bold;">极略与你的设备不兼容，因此导入被终止了。</span><br>` + pack.changelog;
+			return;
+		}
+		game.showExtensionChangeLog(pack.changelog);
+	}
+
+	if (config.debug) {
+		lib.arenaReady.push(() => {
+			lib.config.characters = window.__configCharactersBackup.slice();
+		});
+	}
+	if (!_status.evaluatingExtension) {
+		var callback = () => {
+			if (!game.getExtensionConfig(`极略`, "wrongExtensionNameAlert")) {
+				game.saveExtensionConfig("极略", "wrongExtensionNameAlert", true);
+				alert("万能导入/玄武版导入时需将拓展名设置为极略！你是不是设置错了？");
+			}
+		};
+		if (lib.device) {
+			window.resolveLocalFileSystemURL(lib.assetURL, function (entry) {
+				entry.getDirectory("extension/极略/", {}, function (dirEntry) {}, callback);
+			});
+		} else {
+			fetch(lib.assetURL + "extension/极略/extension.js").catch(e => {
+				setTimeout(callback, 500);
+			});
+		}
+	} else {
+		game.saveExtensionConfig("极略", "wrongExtensionNameAlert", false);
+	}
+	//SR武将突破初始列表
+	const configx = pack.code.config;
+	for (let i in configx) {
+		if (!configx[i].jlsg_upgrade) {
+			continue;
+		} else {
+			configx[i].onclick(game.getExtensionConfig(`极略`, i));
+		}
+	}
+
+	//武将替换
+	const characterReplaceExclude = {
+			jlsgsk_luzhi: "yl_luzhi",
+			jlsgsk_huangyueying: "jsp_huangyueying",
+			jlsgsk_simashi: "jin_simashi",
+			jlsgsk_simazhao: "jin_simazhao",
+			jlsgsk_jiangqin: "jiangqing",
+			jlsgsk_guanyu: "jsp_guanyu",
+			jlsgsk_jiping: "sp_jiben",
+			jlsgsk_mifuren: "sp_mifuren",
+			jlsgsk_hejin: "re_hejin",
+			jlsgsk_zoushi: "re_zoushi",
+			jlsgsk_kongrong: "sp_kongrong",
+			jlsgsk_machao: "sp_machao",
+			jlsgsk_caiwenji: "sp_caiwenji",
+			jlsgsk_jdjg_sunshangxiang: "sunshangxiang",
+			jlsgsk_syqj_guanyu: "guanyu",
+			jlsgsk_sslh_zhenji: "zhenji",
+			jlsgsk_pangtong: "sp_pangtong",
+			jlsgsk_spwq_lvbu: "lvbu",
+		},
+		trivialSolveCharacterReplace = function (name, prefix = "") {
+			let originalName = prefix + name.substring(name.lastIndexOf("_") + 1);
+			if (name in characterReplaceExclude) {
+				if (characterReplaceExclude[name]) {
+					originalName = characterReplaceExclude[name];
+				} else {
+					return;
+				}
+			}
+			if (originalName) {
+				if (get.character(originalName).isNull) {
+					return;
+				}
+				if (!lib.characterReplace[originalName]) {
+					lib.characterReplace[originalName] = [originalName, name];
+				} else {
+					lib.characterReplace[originalName].push(name);
+				}
+			}
+		};
+	for (let packName of ["jlsg_sr", "jlsg_sk", "jlsg_soul", "jlsg_skpf", "jlsg_sy"]) {
+		const list = Object.keys(lib.characterPack[packName] || {});
+		if (!list.length) {
+			continue;
+		}
+		if (packName != "jlsg_sy") {
+			if (packName == "jlsg_soul") {
+				for (let name of list) {
+					trivialSolveCharacterReplace(name, "shen_");
+				}
+			} else {
+				for (let name of list) {
+					trivialSolveCharacterReplace(name);
+				}
+			}
+		}
+	}
+
+	//BOSS音乐
+	if (config.jlsg_identity_music_image && get.mode() != "boss") {
+		lib.arenaReady.push(function () {
+			ui.backgroundMusic.volume = lib.config.volumn_background / 8;
+			setTimeout(function () {
+				ui.backgroundMusic.src = lib.assetURL + "extension/极略/audio/other/jlsg_identity_music_image.mp3";
+			}, 100);
+			setInterval(function () {
+				ui.backgroundMusic.src = lib.assetURL + "extension/极略/audio/other/jlsg_identity_music_image.mp3";
+			}, 137000);
+		});
+		lib.arenaReady.push(function () {
+			ui.background.setBackgroundImage("extension/极略/image/other/jlsg_identity_music_image.jpg");
+		});
+	}
+
+	//BOSS背景
+	if (config.jlsg_boss_music_image && get.mode() == "boss") {
+		lib.arenaReady.push(function () {
+			ui.backgroundMusic.volume = lib.config.volumn_background / 8;
+			setTimeout(function () {
+				ui.backgroundMusic.src = lib.assetURL + "extension/极略/audio/other/jlsg_boss_music_image.mp3";
+			}, 100);
+			setInterval(function () {
+				ui.backgroundMusic.src = lib.assetURL + "extension/极略/audio/other/jlsg_boss_music_image.mp3";
+			}, 168000);
+		});
+		lib.arenaReady.push(function () {
+			ui.background.setBackgroundImage("extension/极略/image/other/jlsg_boss_music_image.jpg");
+		});
+	}
+
+	// 评级
+	if (lib.rank) {
+		var rank = {
+			s: ["jlsgsoul_diaochan", "jlsgsoul_guojia", "jlsgsoul_simahui", "jlsgsoul_simayi", "jlsgsoul_zhaoyun", "jlsgsoul_sunquan", "jlsgsr_huangyueying", "jlsgsoul_huangyueying", "jlsgsoul_sp_zhugeliang", "jlsgsk_caiwenji", "jlsgsoul_ganning", "jlsgsoul_sp_lvbu", "jlsgsoul_xiahoudun", "jlsgsk_xiahoushi", "jlsgsk_sundeng", "jlsgsk_wuxian", "jlsgsoul_xuzhu", "jlsgsoul_sp_ganning", "jlsgsk_hetaihou", "jlsgsoul_sp_diaochan", "jlsgsk_shamoke", "jlsgsk_zhaoyan", "jlsgsoul_sp_huangyueying", "jlsgsk_caoying", "jlsgsoul_caoren", "jlsgsoul_sp_simayi", "jlsgsk_nanhualaoxian", "jlsgsoul_caopi", "jlsgsk_wanniangongzhu"],
+			ap: ["jlsgsr_lvbu", "jlsgsoul_caocao", "jlsgsoul_dianwei", "jlsgsoul_jiaxu", "jlsgsoul_guanyu", "jlsgsoul_liubei", "jlsgsoul_zhugeliang", "jlsgsoul_lvmeng", "jlsgsoul_luxun", "jlsgsoul_sunshangxiang", "jlsgsoul_zhenji", "jlsgsoul_huanggai", "jlsgsr_zhenji", "jlsgsr_sunshangxiang", "jlsgsr_lvmeng", "jlsgsr_luxun", "jlsgsr_daqiao", "jlsgsk_dongzhuo", "jlsgsk_guonvwang", "jlsgsoul_zhangliao", "jlsgsk_xizhicai", "jlsgsk_xushi", "jlsgsk_caorui", "jlsgsk_sunxiu", "jlsgsk_zhangrang", "jlsgsk_xinxianying", "jlsgsoul_sp_zhangliao", "jlsgsk_liuyan", "jlsgsk_lvfan", "jlsgsoul_xiaoqiao", "jlsgsk_sslh_zhenji", "jlsgsk_zhongyao", "jlsgsk_huanghao", "jlsgsk_huaman", "jlsgsk_wangyuanji", "jlsgsk_zhangchangpu"],
+			a: ["jlsgsoul_zhouyu", "jlsgsoul_zuoci", "jlsgsr_simayi", "jlsgsr_guojia", "jlsgsr_diaochan", "jlsgsk_chengyu", "jlsgsk_yujin", "jlsgsk_simazhao", "jlsgsk_kuaiyue", "jlsgsk_zhangning", "jlsgsk_zhoutai", "jlsgsk_dongbai", "jlsgsk_liuchen", "jlsgsk_caoxiu", "jlsgsk_caojie", "jlsgsk_sunliang", "jlsgsk_yuji", "jlsgsk_sunru", "jlsgsoul_huangzhong", "jlsgsk_guohuanghou", "jlsgsk_chenqun", "jlsgsk_jiangwei", "jlsgsk_spwq_lvbu"],
+			am: ["jlsgsoul_zhangjiao", "jlsgsk_zuoci", "jlsgsoul_lvbu", "jlsgsr_zhugeliang", "jlsgsr_zhangliao", "jlsgsr_liubei", "jlsgsk_dongyun", "jlsgsk_sunqian", "jlsgsoul_huatuo", "jlsgsr_huatuo", "jlsgsk_kongrong", "jlsgsk_lukang", "jlsgsk_xianglang", "jlsgsk_guanlu", "jlsgsk_zhanglu", "jlsgsk_yangxiu", "jlsgsk_zoushi", "jlsgsk_guansuo", "jlsgsk_baosanniang", "jlsgsk_zhoufei", "jlsgsk_zhangliang", "jlsgsk_panshu", "jlsgsoul_sp_zhangjiao", "jlsgsk_jushou", "jlsgsk_yanyan", "jlsgsoul_daqiao", "jlsgsk_zhugezhan", "jlsgsk_gongsunyuan", "jlsgsk_jdjg_sunshangxiang", "jlsgsk_zhangyi", "jlsgsk_caochun", "jlsgsk_syqj_guanyu", "jlsgsk_beimihu", "jlsgsk_pangtong"],
+			bp: ["jlsgsr_zhouyu", "jlsgsr_sunquan", "jlsgsr_machao", "jlsgsr_ganning", "jlsgsr_caocao", "jlsgsr_zhaoyun", "jlsgsk_chendao", "jlsgsk_guanxing", "jlsgsk_huangyueying", "jlsgsk_zumao", "jlsgsk_zhugejin", "jlsgsk_maliang", "jlsgsk_sunluyu", "jlsgsk_mizhu", "jlsgsr_xiahoudun", "jlsgsk_zhangren", "jlsgsk_zhangbu", "jlsgsk_heqi", "jlsgsk_zhuzhi", "jlsgsk_wanglang", "jlsgsk_zhaoxiang", "jlsgsk_lingcao"],
+			b: ["jlsgsoul_zhangfei", "jlsgsr_zhangfei", "jlsgsr_guanyu", "jlsgsk_buzhi", "jlsgsk_caochong", "jlsgsk_dengzhi", "jlsgsk_dongxi", "jlsgsk_guanyu", "jlsgsk_feiyi", "jlsgsk_hejin", "jlsgsk_jiping", "jlsgsk_jiangqin", "jlsgsk_luji", "jlsgsk_miheng", "jlsgsk_zhuran", "jlsgsk_wangyi", "jlsgsk_luzhi", "jlsgsk_sunhao", "jlsgsk_zhoucang", "jlsgsk_zhangxiu", "jlsgsk_quancong", "jlsgsk_simashi", "jlsgsk_tianfeng", "jlsgsk_wenchou", "jlsgsk_xuyou", "jlsgsk_yanliang", "jlsgsk_wangping", "jlsgsk_zhangbao", "jlsgsr_xuzhu", "jlsgsk_zhugeguo", "jlsgsoul_machao", "jlsgsk_wuyi", "jlsgsk_wenyang", "jlsgsk_wutugu", "jlsgsk_mayunlu"],
+			bm: ["jlsgsr_huanggai", "jlsgsk_caoren", "jlsgsk_bianfuren", "jlsgsk_huaxiong", "jlsgsk_liyan", "jlsgsk_lvlingqi", "jlsgsk_sunce", "jlsgsk_yuji", "jlsgsk_dingfeng", "jlsgsk_zangba", "jlsgsk_mifuren", "jlsgsk_machao", "jlsgsk_panzhang", "jlsgsk_lvdai"],
+			c: ["jlsgsk_gongsunzan", "jlsgsk_panfeng", "jlsgsk_mateng"],
+			d: [],
+			rarity: {
+				legend: [
+					// 传说
+					"jlsgsk_baosanniang",
+					"jlsgsk_beimihu",
+					"jlsgsk_caochun",
+					"jlsgsk_caojinyu",
+					"jlsgsk_caoying",
+					"jlsgsk_chengyu",
+					"jlsgsk_dongbai",
+					"jlsgsk_duyu",
+					"jlsgsk_gexuan",
+					"jlsgsk_guansuo",
+					"jlsgsk_guohuanghou",
+					"jlsgsk_hetaihou",
+					"jlsgsk_huaman",
+					"jlsgsk_huangchengyan",
+					"jlsgsk_liuyan",
+					"jlsgsk_lvfan",
+					"jlsgsk_mayunlu",
+					"jlsgsk_nanhualaoxian",
+					"jlsgsk_panshu",
+					"jlsgsk_qinmi",
+					"jlsgsk_shamoke",
+					"jlsgsk_sundeng",
+					"jlsgsk_sunliang",
+					"jlsgsk_sunru",
+					"jlsgsk_sunxiu",
+					"jlsgsk_tianfeng",
+					"jlsgsk_wanglang",
+					"jlsgsk_wangyuanji",
+					"jlsgsk_wenyang",
+					"jlsgsk_wuxian",
+					"jlsgsk_xiahoushi",
+					"jlsgsk_xinxianying",
+					"jlsgsk_xizhicai",
+					"jlsgsk_yanghuiyu",
+					"jlsgsk_yangwan",
+					"jlsgsk_yuji",
+					"jlsgsk_zhangchangpu",
+					"jlsgsk_zhangliang",
+					"jlsgsk_zhanglu",
+					"jlsgsk_zhangning",
+					"jlsgsk_zhangrang",
+					"jlsgsk_zhaoxiang",
+					"jlsgsk_zhaoyan",
+					"jlsgsk_zhouyi",
+					"jlsgsk_zhugedan",
+					"jlsgsk_zhugeguo",
+					"jlsgsk_zhugezhan",
+					"jlsgsk_zoushi",
+					"jlsgsk_zuoci",
+				],
+				epic: [
+					// 史诗
+					"jlsgsk_caoxiu",
+					"jlsgsk_cenhun",
+					"jlsgsk_chenqun",
+					"jlsgsk_chenshi",
+					"jlsgsk_dongzhuo",
+					"jlsgsk_gongsunyuan",
+					"jlsgsk_guanlu",
+					"jlsgsk_guanxing",
+					"jlsgsk_guohuai",
+					"jlsgsk_heqi",
+					"jlsgsk_huanghao",
+					"jlsgsk_jiangqin",
+					"jlsgsk_jushou",
+					"jlsgsk_kongrong",
+					"jlsgsk_kuaiyue",
+					"jlsgsk_lingcao",
+					"jlsgsk_liuchen",
+					"jlsgsk_lukang",
+					"jlsgsk_luzhi",
+					"jlsgsk_lvkai",
+					"jlsgsk_panzhang",
+					"jlsgsk_simashi",
+					"jlsgsk_simazhao",
+					"jlsgsk_sunhao",
+					"jlsgsk_sunqian",
+					"jlsgsk_tadun",
+					"jlsgsk_wutugu",
+					"jlsgsk_xushi",
+					"jlsgsk_yangxiu",
+					"jlsgsk_yanjun",
+					"jlsgsk_yanyan",
+					"jlsgsk_yujin",
+					"jlsgsk_zhangbao",
+					"jlsgsk_zhangbu",
+					"jlsgsk_zhangyi",
+					"jlsgsk_zhongyao",
+					"jlsgsk_zhoufei",
+					"jlsgsk_zhugejin",
+					"jlsgsk_zhuzhi",
+				],
+				rare: [
+					// 稀有
+					"jlsgsk_buzhi",
+					"jlsgsk_chendao",
+					"jlsgsk_dongxi",
+					"jlsgsk_dongyun",
+					"jlsgsk_jiping",
+					"jlsgsk_luji",
+					"jlsgsk_lvlingqi",
+					"jlsgsk_maliang",
+					"jlsgsk_mateng",
+					"jlsgsk_mifuren",
+					"jlsgsk_mizhu",
+					"jlsgsk_quancong",
+					"jlsgsk_sunluyu",
+					"jlsgsk_wangping",
+					"jlsgsk_wangyi",
+					"jlsgsk_xuyou",
+					"jlsgsk_zhangren",
+					"jlsgsk_zhangxiu",
+					"jlsgsk_zhoutai",
+					"jlsgsk_zhuran",
+				],
+				junk: [
+					// 平凡
+					"jlsgsk_caoren",
+					"jlsgsk_dengzhi",
+					"jlsgsk_dingfeng",
+					"jlsgsk_feiyi",
+					"jlsgsk_gongsunzan",
+					"jlsgsk_hejin",
+					"jlsgsk_huaxiong",
+					"jlsgsk_liyan",
+					"jlsgsk_panfeng",
+					"jlsgsk_sunce",
+					"jlsgsk_yanliang",
+					"jlsgsk_zangba",
+					"jlsgsk_zhoucang",
+				],
+			},
+		};
+		// soul characters reside in the highest rarity rank
+		for (let name of Object.keys(lib.characterPack["jlsg_soul"])) {
+			if (!Object.keys(rank.rarity).some(rarity => rank.rarity[rarity].includes(name))) {
+				rank.rarity.legend.push(name);
+			}
+		}
+		// skpf characters reside in the highest rarity rank
+		for (let name of Object.keys(lib.characterPack["jlsg_skpf"])) {
+			if (!Object.keys(rank.rarity).some(rarity => rank.rarity[rarity].includes(name))) {
+				rank.rarity.legend.push(name);
+			}
+		}
+		// sy characters reside in the highest rarity rank
+		for (let name of Object.keys(lib.characterPack["jlsg_sy"])) {
+			if (!Object.keys(rank.rarity).some(rarity => rank.rarity[rarity].includes(name))) {
+				rank.rarity.legend.push(name);
+			}
+		}
+		let addRank = function (rank) {
+			if (!lib.rank) {
+				return;
+			}
+			for (let i in rank) {
+				if (i == "rarity") {
+					continue;
+				}
+				lib.rank[i] ??= [];
+				lib.rank[i].addArray(rank[i]);
+			}
+			if (rank.rarity && lib.rank.rarity) {
+				for (let i in rank.rarity) {
+					lib.rank.rarity[i] ??= [];
+					lib.rank.rarity[i].addArray(rank.rarity[i]);
+				}
+			}
+		};
+		addRank(rank);
+	}
+}

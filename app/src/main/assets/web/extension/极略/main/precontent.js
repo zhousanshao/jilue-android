@@ -1,0 +1,1271 @@
+import { lib, game, ui, get, ai, _status } from "../../../noname.js";
+import { characters } from "../character/index.js";
+import { cards } from "../card/index.js";
+export async function precontent(config, originalPack) {
+	if (!config.enable) {
+		return;
+	}
+	if (config.debug) {
+		window.__configCharactersBackup = lib.config.characters;
+		lib.config.characters = ["jlsg_sk", "jlsg_sr", "jlsg_soul", "jlsg_sy"];
+	}
+
+	lib.init.css(lib.assetURL + "extension/极略", "extension");
+
+	lib.namePrefix.set("极略SK神", {
+		getSpan(prefix, name) {
+			return `${get.prefixSpan("极略SK", name)}${get.prefixSpan("神", name)}`;
+		},
+	});
+	lib.namePrefix.set("极略SP神", {
+		getSpan(prefix, name) {
+			return `${get.prefixSpan("极略SP", name)}${get.prefixSpan("神", name)}`;
+		},
+	});
+	lib.namePrefix.set("极略SR", {
+		getSpan: () => {
+			return `<span style="writing-mode:horizontal-tb;-webkit-writing-mode:horizontal-tb;font-family:MotoyaLMaru;transform:scaleY(0.85)" data-nature="keymm">SR</span>`;
+		},
+	});
+	lib.namePrefix.set("极略SK", {
+		getSpan: () => {
+			return `<span style="color:#fbefef;writing-mode:horizontal-tb;-webkit-writing-mode:horizontal-tb;font-family:MotoyaLMaru;transform:scaleY(0.85)" data-nature="firemm">SK</span>`;
+		},
+	});
+	lib.namePrefix.set("极略SP", {
+		getSpan: () => {
+			return `<span style="writing-mode:horizontal-tb;-webkit-writing-mode:horizontal-tb;font-family:MotoyaLMaru;transform:scaleY(0.85)">SP</span>`;
+		},
+	});
+	lib.namePrefix.set("极略★SK", {
+		getSpan(prefix, name) {
+			return `${get.prefixSpan("★SP", name)}${get.prefixSpan("极略SK", name)}`;
+		},
+	});
+	//真实伤害补丁
+	let originalFilterEnable = lib.filter.filterEnable;
+	lib.filter.filterEnable = function (event, player, skill) {
+		let triggername = event.name;
+		if (
+			player._hookTrigger &&
+			player._hookTrigger.some(i => {
+				const info = lib.skill[i].hookTrigger;
+				return info && info.block && info.block(event, player, triggername, skill);
+			})
+		) {
+			return false;
+		}
+		return originalFilterEnable.apply(this, arguments);
+	};
+
+	//魔势力及前缀创建
+	if (game.getExtensionConfig("极略", "syRefactor")) {
+		game.addGroup("jlsgsy", "魔", "极略三英", { color: "#8B4A51" });
+		lib.namePrefix.set("极略SY", {
+			getSpan: () => {
+				const span = document.createElement("span"),
+					style = span.style;
+				style.color = "#8B4A51";
+				style.writingMode = style.webkitWritingMode = "horizontal-tb";
+				style.fontFamily = "MotoyaLMaru";
+				style.transform = "scaleY(0.85)";
+				span.dataset.nature = "keymm";
+				span.innerHTML = "SY";
+				return span.outerHTML;
+			},
+		});
+		lib.namePrefix.set("极略SY暴怒", {
+			getSpan: () => {
+				const span = document.createElement("span"),
+					style = span.style;
+				style.color = "#B22222";
+				style.writingMode = style.webkitWritingMode = "horizontal-tb";
+				style.fontFamily = "MotoyaLMaru";
+				style.transform = "scaleY(0.85)";
+				span.dataset.nature = "orangemm";
+				span.innerHTML = "SY";
+				return span.outerHTML;
+			},
+		});
+	}
+	//七杀包规则重构
+	if (game.getExtensionConfig("极略", "qsRelic")) {
+		lib.arenaReady.push(function () {
+			game.broadcastAll(function () {
+				const cardPacks = _status.connectMode ? lib.configOL.cardPack : lib.cardPack,
+					prepareEquip = async function (event, trigger, player) {
+						const emptySlots = player.countEmptySlot("equip3") + player.countEmptySlot("equip5");
+						if (emptySlots) {
+							if (player.countEmptySlot("equip3")) {
+								event.card.subtypes = ["equip3"];
+							} else {
+								event.card.subtypes = ["equip5"];
+							}
+						} else {
+							const subtypesList = player
+								.getCards("e", card => get.subtypes(card).includes("equip3") || get.subtypes(card).includes("equip5"))
+								.flatMap(card => get.subtypes(card))
+								.unique();
+							let result;
+							if (subtypesList.length == 1) {
+								result = { control: subtypesList[0] };
+							} else {
+								result = await player
+									.chooseControl(subtypesList)
+									.set("prompt", `请选择置入【${get.translation(event.card)}】的装备栏`)
+									.forResult();
+							}
+							if (result?.control) {
+								event.card.subtypes = [result.control];
+							}
+						}
+					};
+				for (const pack in cardPacks) {
+					const cards = cardPacks[pack];
+					for (const i of cards) {
+						const info = lib.card[i];
+						if (!info) {
+							continue;
+						}
+						if (["equip3", "equip4", "equip5"].includes(info.subtype)) {
+							info.prepareEquip = prepareEquip;
+						} else if (get.mode() == "boss" && get.subtype(i) == "equip1") {
+							info.recastable = true;
+						}
+					}
+				}
+				if (_status.connect) {
+					lib.configOL.mount_combine = true;
+				} else {
+					lib.config.mount_combine = true;
+				}
+				_status.mountCombined = true;
+			});
+		});
+	}
+
+	//失效技能时机创建
+	if (game.getExtensionConfig("极略", "jlsg_disableSkill")) {
+		lib.arenaReady.push(() => {
+			lib.disableSkill ??= {};
+			for (let item of ["tempBanSkill", "disableSkill", "addSkillBlocker"]) {
+				lib.disableSkill[item] = lib.element.player[item];
+			}
+			lib.element.content.DisableSkill = async function (event, trigger, player) {
+				if (!Array.isArray(event.disableSkills)) {
+					event.disableSkills = [event.disableSkills];
+				}
+				//适配神皇甫嵩和黄承彦先加技能后标记失效技能的写法
+				//希望本体能改一下这个写法，神皇甫嵩改的时候记得把init里面storage的重置删掉
+				if (event.type == "addSkillBlocker") {
+					event.special = [];
+					if (Array.isArray(event.args[0])) {
+						for (let i of event.args[0]) {
+							if (["hm_podai_sb", "dcjiezhen_blocker"].includes(i)) {
+								event.special.add(i);
+							}
+						}
+					} else if (["hm_podai_sb", "dcjiezhen_blocker"].includes(event.args[0])) {
+						event.special = event.args[0];
+					}
+					if (event.special.includes("dcjiezhen_blocker")) {
+						let skills = event.player.getSkills(null, false, false).filter(function (i) {
+							if (i == "bazhen") {
+								return;
+							}
+							var info = get.info(i);
+							return info && !get.is.locked(i) && !info.limited && !info.juexingji && !info.zhuSkill && !info.charlotte && !info.persevereSkill;
+						});
+						event.disableSkills.addArray(skills);
+					} else if (event.special.includes("hm_podai_sb")) {
+						event.disableSkills.add("未知");
+					}
+					event.num = event.disableSkills.length;
+				}
+				await event.trigger(event.name + "Before");
+				await event.trigger(event.name + "Begin");
+				if (event._cancelled) {
+					return;
+				}
+				if (event.type.endsWith("Sub")) {
+					lib.disableSkill[event.type.slice(0, -4)].apply(player, event.args);
+				} else {
+					lib.disableSkill[event.type].apply(player, event.args);
+				}
+				await event.trigger(event.name + "Omitted");
+			};
+			lib.element.player.tempBanSkill = function (...args) {
+				let str = "disableSkill";
+				if (!_status.disableSkills && Array.isArray(args[0])) {
+					game.broadcastAll(function (skills) {
+						_status.disableSkills = skills;
+					}, args[0]);
+				} else if (_status.disableSkills) {
+					if (_status.disableSkills.slice(-1)[0] == args[0]) {
+						game.broadcastAll(() => delete _status.disableSkills);
+					}
+					str += "Sub";
+				}
+				let evt = game.createEvent(str);
+				evt.type = "tempBanSkill";
+				evt.player = this;
+				evt.num = Array.isArray(args[0]) ? args[0].length : 1;
+				evt.disableSkills = args[0];
+				evt.args = args;
+				//Before, Begin, Omitted手动trigger，方便修改
+				evt._triggered = 2;
+				evt.setContent("DisableSkill");
+			};
+			lib.element.player.disableSkill = function (...args) {
+				let str = "disableSkill";
+				if (!_status.disableSkills && Array.isArray(args[1])) {
+					game.broadcastAll(function (skills) {
+						_status.disableSkills = skills;
+					}, args[1]);
+				} else if (_status.disableSkills) {
+					if (_status.disableSkills.slice(-1)[0] == args[1]) {
+						game.broadcastAll(() => delete _status.disableSkills);
+					}
+					str += "Sub";
+				}
+				let evt = game.createEvent(str);
+				evt.type = "disableSkill";
+				evt.player = this;
+				evt.num = Array.isArray(args[1]) ? args[1].length : 1;
+				evt.disableSkills = args[1];
+				evt.args = args;
+				//Before, Begin, Omitted手动trigger，方便修改
+				evt._triggered = 2;
+				evt.setContent("DisableSkill");
+			};
+			lib.element.player.addSkillBlocker = function (arg) {
+				let list = [],
+					skill = arg,
+					str = "disableSkill",
+					evt = game.createEvent(str);
+				evt.type = "addSkillBlocker";
+				evt.player = this;
+				for (let sk of this.getSkills(null, false, false)) {
+					if (lib.skill[skill].skillBlocker(sk, this)) {
+						list.add(sk);
+					}
+				}
+				evt.disableSkills = list;
+				evt.num = list.length;
+				evt.args = [arg];
+				//Before, Begin, Omitted手动trigger，方便修改
+				evt._triggered = 2;
+				evt.blocker = skill.skillBlocker;
+				evt.setContent("DisableSkill");
+			};
+		});
+	}
+	var jlsg = {
+		debug: {
+			logCurrentRanks() {
+				var logC = function (name) {
+					console.log(`${name} ${get.translation(name)} ${get.rank(name)}`);
+				};
+				Array.from(document.getElementsByClassName("character"))
+					.filter(c => c.link)
+					.forEach(c => logC(c.link));
+				if (!game.players || !game.players.forEach) {
+					return;
+				}
+				game.players.forEach(p => {
+					if (p.name1) {
+						logC(p.name1);
+					}
+					if (p.name2) {
+						logC(p.name2);
+					}
+				});
+			},
+			debugProperty(obj, name, get = true, set = true) {
+				if (name in obj) {
+					console.log(name, "found in", obj);
+					obj["__" + name + "__"] = obj[name];
+					delete obj[name];
+				} else {
+					console.log(name, "not found in", obj);
+				}
+				Object.defineProperty(obj, name, {
+					get() {
+						return this["__" + name + "__"];
+					},
+					set(value) {
+						// eslint-disable-next-line no-setter-return
+						return (this["__" + name + "__"] = value);
+					},
+				});
+			},
+		},
+		/***
+		 * 极略将池。用开关控制是否全扩
+		 */
+		get characterList() {
+			//只包含标风+极略的将包
+			const packs = ["standard", "shenhua", "jlsg_sr", "jlsg_sk", "jlsg_skpf", "jlsg_soul", "jlsg_sy"],
+				config = game.getExtensionConfig("极略", "characterList"),
+				list = [];
+			let enabledPacks;
+			if (_status.connectMode) {
+				enabledPacks = lib.configOL.characterPack;
+			} else {
+				enabledPacks = lib.config.characters;
+			}
+			for (const packName of enabledPacks) {
+				if (config && !packs.includes(packName)) {
+					continue;
+				}
+				const pack = lib.characterPack[packName];
+				for (let j in pack) {
+					if (lib.filter.characterDisabled(j) || lib.filter.characterDisabled2(j)) {
+						continue;
+					}
+					list.add(j);
+				}
+			}
+			delete this.characterList;
+			this.characterList = list;
+			return list;
+		},
+		/***
+		 * 技能筛选，用法同`lib.filter.skillDisabled`
+		 * @param {string} skill 需要检测的技能
+		 * @param {Player} [player] 检测该技能是否符合`player`需求
+		 * @returns { boolean } 若技能不通过检测，则返回`ture`
+		 */
+		skillDisabled(skill, player) {
+			if (lib.filter.skillDisabled(skill)) {
+				return true;
+			}
+			const info = get.info(skill);
+			if (!info || info.charlotte) {
+				return true;
+			}
+			if (player && typeof player.hasSkill === "function") {
+				if (player.hasSkill(skill, null, false, false)) {
+					return true;
+				} else if (info.groupSkill && player.group !== info.groupSkill) {
+					return true;
+				} else if (info.zhuSkill && !player.isZhu2()) {
+					return true;
+				} else if (info.ai?.combo) {
+					const combo = Array.isArray(info.ai.combo) ? info.ai.combo : [info.ai.combo];
+					if (!combo.every(skillx => player.hasSkill(skillx, null, false, false))) {
+						return true;
+					}
+				}
+			}
+			return false;
+		},
+		//绝对魔王包3的东西，作者：鬼神易(GuiShenYi)
+		/***
+		 * 用于播放弃置/获得多张武将牌动画的函数
+		 * @param {Player} player 弃置/获得多张武将牌的目标
+		 * @param {string[]} [add] 获得的武将牌列表
+		 * @param {string[]} [remove] 弃置的武将牌列表
+		 * @param {boolean} [throwx] 是否间隔弃置和获得动画之间的延迟，默认延迟`true`
+		 * @returns { GameEvent }
+		 */
+		changeCharacter(player, add = [], remove = [], throwx = true) {
+			let next = game.createEvent("jlsg_changeCharacter");
+			next.player = player;
+			next.add = add;
+			next.remove = remove;
+			next.throwx = throwx;
+			next.setContent(async function (event, trigger, player) {
+				const add = event.add,
+					remove = event.remove;
+				if (remove.length) {
+					game.broadcastAll(
+						function (player, list) {
+							const cards = [];
+							for (let i = 0; i < list.length; i++) {
+								const cardname = "huashen_card_" + list[i];
+								if (!lib.card[cardname]) {
+									lib.card[cardname] = {
+										fullborder: true,
+										image: "character:" + list[i],
+									};
+									lib.translate[cardname] = get.rawName2(list[i]);
+								}
+								cards.push(game.createCard(cardname, "", ""));
+							}
+							player.$throw(cards, 1000, "nobroadcast");
+						},
+						player,
+						remove
+					);
+				}
+				if (add.length) {
+					if (event.throwx) {
+						if (remove.length) {
+							await game.delay(1.5);
+						}
+					}
+					await new Promise((resolve, reject) => {
+						game.broadcastAll(
+							async function (player, list) {
+								let cards = [];
+								for (let i = 0; i < list.length; i++) {
+									let cardname = "huashen_card_" + list[i];
+									lib.card[cardname] = {
+										fullborder: true,
+										image: "character:" + list[i],
+									};
+									lib.translate[cardname] = get.slimNameHorizontal(list[i]);
+									cards.push(game.createCard(cardname, "", ""));
+								}
+								let nodes = [];
+								for (let card of cards) {
+									let i = cards.indexOf(card);
+									const left0 = -cards.length * 52 - (cards.length - 1) * 8,
+										left = left0 + i * 120;
+									let node1 = player.$throwxy2(card, "calc(50% - " + -left + "px)", "calc(50% - 52px)", "perspective(600px) rotateY(180deg)", true);
+									card.clone = node1;
+									nodes.push(node1);
+									if (lib.config.cardback_style != "default") {
+										node1.style.transitionProperty = "none";
+										ui.refresh(node1);
+										node1.classList.add("infohidden");
+										ui.refresh(node1);
+										node1.style.transitionProperty = "";
+									} else {
+										node1.classList.add("infohidden");
+									}
+									node1.style.transform = "perspective(600px) rotateY(180deg) translateX(0)";
+								}
+								let nodes_copy = nodes.slice();
+								const showNode = async function (node) {
+									const onEnd01 = async function () {
+										node.style.transition = "all ease-in 0.3s";
+										node.style.transform = "perspective(600px) rotateY(270deg) translateX(52px)";
+										let onEnd = async function () {
+											node.classList.remove("infohidden");
+											node.style.transition = "all 0s";
+											ui.refresh(node);
+											node.style.transform = "perspective(600px) rotateY(-90deg) translateX(52px)";
+											ui.refresh(node);
+											node.style.transition = "";
+											ui.refresh(node);
+											node.style.transform = "";
+										};
+										node.listenTransition(onEnd);
+									};
+									node.listenTransition(onEnd01);
+									if (nodes_copy.length) {
+										showNode(nodes_copy.shift());
+									} else {
+										await game.delay(3.5);
+										player.$gain2(cards);
+										try {
+											resolve(true);
+										} catch (e) {}
+									}
+								};
+								showNode(nodes_copy.shift());
+							},
+							player,
+							add
+						);
+					});
+				}
+				event.result = {
+					add: event.add,
+					remove: event.remove,
+				};
+			});
+			return next;
+		},
+		/**
+		 *
+		 * @param {Player} ele 对一名角色进行随从包装
+		 */
+		makeDraggable(ele) {
+			game.broadcastAll(function (ele) {
+				let x0, y0, x1, y1, delta, top0, left0;
+				ele.addEventListener("pointerdown", e => {
+					x0 = x1 = e.screenX;
+					y0 = y1 = e.screenY;
+					delta = 0;
+					({ top: top0, left: left0 } = getComputedStyle(ele));
+					let ctx = _status.jlsg_draggable.get(ele) || {
+						ids: [],
+					};
+					ctx.ids = [e.pointerId];
+					ele.style.transition = "none";
+					ele.style.touchAction = "none";
+					_status.jlsg_draggable.set(ele, ctx);
+				});
+				ele.addEventListener("pointermove", e => {
+					if (e.pressure == 0) {
+						return;
+					}
+					let ctx = _status.jlsg_draggable.get(ele);
+					if (!ctx || !ctx.ids.includes(e.pointerId)) {
+						return;
+					}
+					delta += Math.abs(e.screenX - x1);
+					delta += Math.abs(e.screenY - y1);
+					if (delta < 10) {
+						return;
+					}
+					ele.style.left = `calc(${left0} + ${e.screenX - x0}px / ${game.documentZoom})`;
+					ele.style.top = `calc(${top0} + ${e.screenY - y0}px / ${game.documentZoom})`;
+				});
+				if (!_status.jlsg_draggable) {
+					_status.jlsg_draggable = new Map();
+					let listener = e => {
+						for (let ele of e.composedPath()) {
+							let ctx = _status.jlsg_draggable.get(ele);
+							if (!ctx) {
+								continue;
+							}
+							ctx.ids.remove(e.pointerId);
+							if (!ctx.ids.length) {
+								ele.style.transition = "";
+								ele.style.touchAction = "";
+								_status.jlsg_draggable.delete(ele);
+							}
+						}
+					};
+					addEventListener("pointerup", listener);
+					addEventListener("pointercancel", listener);
+				}
+			}, ele);
+		},
+		showRepo() {
+			var mirrorURL = lib.extensionPack["极略"] && lib.extensionPack["极略"].mirrorURL;
+			if (!mirrorURL) {
+				return;
+			}
+			this.openLink(mirrorURL);
+		},
+		openLink(url) {
+			if (window.cordova) {
+				if (cordova.InAppBrowser) {
+					return cordova.InAppBrowser.open(url, "_system");
+				}
+				return;
+			}
+			if (window.require) {
+				return require("electron").shell.openExternal(url);
+			}
+			return window.open(url);
+		},
+		checkUpdate(refNode) {
+			if (!("noModule" in HTMLScriptElement.prototype)) {
+				alert("游戏运行时/系统webview过老无法自动更新");
+				return;
+			}
+			import("../modules/idb-keyval.js");
+			var version = lib.extensionPack["极略"].version;
+			refNode.insertAdjacentHTML("afterend", `<div>当前版本${version}<br>正在获取最新版本号</div>`);
+			var cNode = refNode.nextSibling;
+			var responsePromise = fetch("https://api.github.com/repos/xiaoas/jilue/releases/latest", {
+				headers: {
+					accept: "application/vnd.github.v3+json",
+					"accept-language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+					"cache-control": "no-cache",
+					pragma: "no-cache",
+				},
+				method: "GET",
+			});
+			// TODO: only update to version with same major version
+			let successHandler = response => {
+				if (response.status >= 300) {
+					cNode.innerHTML += ` 失败<br>${response.status} ${response.statusText}`;
+					return Promise.reject(response);
+				} else {
+					cNode.innerHTML += " 成功";
+					return response;
+				}
+			};
+			let errorHandler = error => {
+				cNode.innerHTML += ` 失败<br>${error}`;
+				console.log(error);
+				return Promise.reject(error);
+			};
+			responsePromise
+				.then(successHandler, errorHandler)
+				.then(response => response.json())
+				.then(data => {
+					var latestVersion = data.tag_name;
+					if (latestVersion.startsWith("v")) {
+						latestVersion = latestVersion.slice(1);
+					}
+					if (latestVersion > version) {
+						refNode.innerHTML = `更新至 ${latestVersion}<br>`;
+						window.jlsg.updateData = data;
+						var newFunc = `jlsg.updateGuard(this)`;
+						refNode.setAttribute("onClick", newFunc);
+					} else {
+						refNode.innerHTML = `当前已经是最新版<br>`;
+					}
+				});
+		},
+		async updateGuard(refNode) {
+			if (!this.update) {
+				return;
+			}
+			if (!this.update.guard) {
+				this.update.guard = true;
+				await this.update(refNode);
+				this.update.guard = false;
+			}
+		},
+		async update(refNode) {
+			// TODO
+			var latestTag = window.jlsg.updateData.tag_name;
+			var currentTag = "v" + lib.extensionPack["极略"].version;
+			var response = await fetch("https://api.github.com/repos/xiaoas/jilue/tags", {
+				headers: {
+					accept: "application/vnd.github.v3+json",
+					"accept-language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+				},
+				method: "GET",
+			});
+			var tags = await response.json();
+			tags = tags.map(t => t.name);
+			if (!tags.includes(currentTag)) {
+				if (tags.every(t => t > currentTag)) {
+					refNode.insertAdjacentHTML("afterend", `<div>没有找到适用当前版本的更新讯息${currentTag}</div>`);
+				}
+				currentTag = tags.filter(t => t < currentTag).reduce((a, b) => (a < b ? b : a));
+			}
+			// var compareURI = `https://api.github.com/repos/xiaoas/jilue/compare/v2.1.0208...v2.2.0631`
+			var compareURI = `https://api.github.com/repos/xiaoas/jilue/compare/${currentTag}...${latestTag}`;
+			var cNode, data;
+			try {
+				refNode.insertAdjacentHTML("afterend", `<div>获取文件列表</div>`);
+				cNode = refNode.nextSibling;
+				let response = await fetch(compareURI, {
+					headers: {
+						accept: "application/vnd.github.v3+json",
+						"accept-language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+					},
+					method: "GET",
+				});
+				data = await response.json();
+				cNode.innerHTML += " 成功";
+			} catch (e) {
+				console.log(e);
+				cNode.innerHTML += " 失败";
+				return;
+			}
+			var files = data.files;
+			game.saveExtensionConfig("极略", "pendingFiles", JSON.stringify(files));
+			var idbKeyval;
+			try {
+				idbKeyval = await import("../modules/idb-keyval.js");
+			} catch (e) {
+				idbKeyval = await import("https://cdn.jsdelivr.net/npm/idb-keyval@5/+esm");
+			}
+			var required = files.filter(f => ["added", "modified"].includes(f.status));
+			var blobs = await idbKeyval.getMany(required.map(f => f.sha));
+			// var downloads = required.map((f,i) => blobs[i] || fetch(f.raw_url))
+			var myMap = new Map();
+			var waitBuffer = [];
+			// for (let f of required) {
+			//   if (f.raw_url.includes("raw.githubusercontent.com")) {
+			//     f.raw_url.replace("raw.githubusercontent.com", "raw.fastgit.org")
+			//   }
+			// }
+			const maxConcurrent = 5,
+				maxRetry = 3;
+			for (let [i, f] of required.entries()) {
+				if (!blobs[i]) {
+					if (myMap.size < maxConcurrent) {
+						myMap.set(fetch(f.raw_url), f);
+					} else {
+						waitBuffer.push(f);
+					}
+				}
+			}
+			// required.forEach((f, i) => blobs[i] || myMap.set(fetch(f.raw_url), f))
+			refNode.insertAdjacentHTML("afterend", `<div>正在下载<span>0</span>/${required.length}请耐心等待</div><br>`);
+			cNode = refNode.nextSibling;
+			var [valNode] = cNode.getElementsByTagName("span");
+			var finishedCnt = {
+				_v: null,
+				get v() {
+					return this._v;
+				},
+				set v(_v) {
+					this._v = _v;
+					valNode.innerHTML = _v.toString();
+				},
+			};
+			var downloadError = 0;
+			finishedCnt.v = required.length - myMap.size - waitBuffer.length;
+			while (myMap.size) {
+				let [completed] = await Promise.any(
+					Array.from(myMap.keys()).map(p =>
+						p.then(
+							res => [p],
+							res => [p]
+						)
+					)
+				);
+				let f = myMap.get(completed);
+				myMap.delete(completed);
+				try {
+					let value = await completed;
+					// value = await value.blob()
+					// save as arrayBuffer
+					value = await value.arrayBuffer();
+					++finishedCnt.v;
+					idbKeyval.set(f.sha, value);
+					console.log(`${f.filename} downloaded and stored.`);
+				} catch (e) {
+					// console.log(f, e)
+					f.retry = f.retry || 0;
+					++f.retry;
+					console.log(`${f.filename} download No.${f.retry} failed`);
+					if (f.retry >= maxRetry) {
+						++downloadError;
+					} else {
+						let nextURL = f.raw_url;
+						nextURL = nextURL.replace("github.com", "hub.fastgit.org");
+						myMap.set(fetch(nextURL), f);
+					}
+				} finally {
+					if (myMap.size < maxConcurrent && waitBuffer.length) {
+						let f = waitBuffer.pop();
+						myMap.set(fetch(f.raw_url), f);
+					}
+				}
+			}
+			if (downloadError != 0) {
+				cNode.innerHTML += `失败${downloadError} 下次运气会更好`;
+				return;
+			}
+			// actually array Buffers
+			blobs = await idbKeyval.getMany(required.map(f => f.sha));
+			if (blobs.some(b => !b)) {
+				cNode.innerHTML += " 失败<br> Error blob not found";
+				return;
+			}
+			let blobMap = new Map(required.map((f, i) => [f.sha, blobs[i]]));
+			if (!game.download) {
+				throw new Error("Not implemented");
+			}
+			cNode.innerHTML += " 成功<br>请酌情等待五秒后再重启不是不可以探测安装完了但是我太懒了";
+			console.log("writing files");
+			if (lib.node && lib.node.fs) {
+				let prefix = __dirname + "/extension/极略/";
+				for (let [i, f] of files.entries()) {
+					switch (f.status) {
+						case "added":
+						case "modified": {
+							let blob = blobMap.get(f.sha);
+							lib.node.fs.writeFile(prefix + f.filename, Buffer.from(blob), e => e && console.log(f, e));
+							break;
+						}
+						case "removed":
+							lib.node.fs.rm(prefix + f.filename, e => e && console.log(f, e));
+							break;
+						case "renamed":
+							lib.node.fs.rename(prefix + f.previous_filename, prefix + f.filename, e => e && console.log(f, e));
+							break;
+						default:
+							console.log(f);
+							break;
+					}
+				}
+			} else {
+				window.resolveLocalFileSystemURL(lib.assetURL, function (entry) {
+					entry.getDirectory("extension/极略/", {}, function (dirEntry) {
+						for (let [i, f] of files.entries()) {
+							switch (f.status) {
+								case "added":
+								case "modified": {
+									let blob = blobMap.get(f.sha);
+									dirEntry.getFile(f.filename, { create: true }, function (fileEntry) {
+										fileEntry.createWriter(function (fileWriter) {
+											fileWriter.write(blob);
+										});
+									});
+									break;
+								}
+								case "removed":
+									dirEntry.getFile(f.filename, function (fileEntry) {
+										fileEntry.remove();
+									});
+									break;
+								case "renamed":
+									dirEntry.getFile(f.previous_filename, function (fileEntry) {
+										fileEntry.moveTo(dirEntry, f.filename);
+									});
+									break;
+								default:
+									console.log(f);
+									break;
+							}
+						}
+					});
+				});
+			}
+			idbKeyval.clear();
+		},
+		showRepoElement(refElement) {
+			let potentialRepo = refElement.nextElementSibling;
+			if (potentialRepo && potentialRepo.id == "repo-link") {
+				potentialRepo.remove();
+			} else {
+				refElement.insertAdjacentHTML("afterend", `<a id="repo-link" onclick="lib.jlsg.showRepo()" style="cursor: pointer;text-decoration: underline;display:block">Visit Repository</a>`);
+				// refElement.nextElementSibling.scrollIntoView({
+				//   behavior: 'smooth',
+				//   block: 'nearest',
+				// });
+			}
+		},
+		helpStr: {
+			mainStr(html) {
+				if (html.hth_more == undefined) {
+					let str = "";
+					if (lib.skill?._jlsg_zhuBuff?.list) {
+						for (let i of get.info("_jlsg_zhuBuff").list) {
+							str += `<br><b style="color: green" onclick="jlsg.helpStr.skillStr(this, '` + i + `')">▶` + get.translation(i) + "</b>";
+						}
+						str = '<hr><li>极略主公buff：<br>极略的特殊机制，当极略武将作为主公时，可以从三个随机主公技中选择并获得一个（如果游戏为双将模式，则额外选择一个主公技）<br>神势力角色当主公时，所有其他角色均视为与其势力相同，神势力角色可以响应所有势力的主公的主公技<br>详见：<a href="https://www.bilibili.com/opus/844481636614537270/?from=readlist">极略主公buff详情</a><br><li>极略主公技能一览：<br>' + str;
+					}
+					var more = ui.create.div(
+						".hth_more",
+						`本拓展基于民间极略的某魔改版，因为当时那位作者说“修复了所有的bug”<br>
+					事实证明这种说法比较离谱<br>
+					——xiaoas<br>
+					本拓展QQ群：<br>
+					无名杀极略拓展交流群 392224094<br>
+					无名杀极略2群 702142668<br>
+					github仓库：<a href="https://github.com/Xiazhiliao/jilue/tree/PR-Branch">点击此处进入</a><br>
+					<li>许愿：<br>
+					许愿是SP神孙尚香的独特机制，效果为从<b style="color: red">征伐</b>、<b style="color: green">宁息</b>、<b style="color: purple">混沌</b>三种命运中选择一个分支，并从随机给出的三个具体效果中获得一个。<br>
+					<br>
+					<li>临时牌：<br>
+					是指在游戏中额外生成的卡牌。<br>
+					临时牌在置入弃牌堆后移除，在其他区域里和正常的卡牌没有区别。<br>
+					<br>
+					` + str
+					);
+					html.hth_more = more;
+				}
+				if (html.hth_more_mode === undefined) {
+					html.hth_more_mode = true;
+					html.parentNode.insertBefore(html.hth_more, html.nextSibling);
+					html.innerHTML = '<div class="hth_menu" onclick="jlsg.helpStr.mainStr(this)">▼帮助内容</div>';
+				} else {
+					html.parentNode.removeChild(html.hth_more);
+					delete html.hth_more_mode;
+					html.innerHTML = '<div class="hth_menu" onclick="jlsg.helpStr.mainStr(this)">▶帮助内容</div>';
+				}
+			},
+			skillStr(html, skill) {
+				if (html.innerHTML[0] == "▶") {
+					html.innerHTML = "▼" + get.translation(skill) + '<br><b style="color: white;font-weight: normal">' + get.translation(skill + "_info") + "</b>";
+				} else {
+					html.innerHTML = "▶" + get.translation(skill);
+				}
+			},
+		},
+		debuffSkill: {
+			trigger: { player: ["damageBefore", "loseHpBefore", "loseMaxHpBefore", "loseBefore", "changeSkillsBefore", "linkBefore", "turnOverBefore", "disableSkillBefore"] },
+			filter(event, player) {
+				let key = lib.jlsg.debuffSkill.translate[event.name];
+				return lib.jlsg.debuffSkill.getInfo(event, player, key).bool;
+			},
+			translate: {
+				damage: "damage",
+				loseHp: "loseHp",
+				loseMaxHp: "loseMaxHp",
+				lose: "discard",
+				loseAsync: "discard",
+				changeSkills: "removeSkill",
+				disableSkill: "disableSkill",
+				linkBefore: "link",
+				link: "link",
+				turnOverBefore: "turnOver",
+				turnOver: "turnOver",
+			},
+			transfer(event, player, name, number = 1, nature = null) {
+				let next,
+					key = ["damage", "loseHp", "loseMaxHp", "discard", "removeSkill", "disableSkill", "link", "turnOver"]
+						.filter(i => {
+							if (i == name) {
+								return false;
+							}
+							if (i == "discard") {
+								return player.countDiscardableCards(player, "he");
+							} else if (i == "removeSkill") {
+								return player.getSkills(null, false, false).length;
+							}
+							return true;
+						})
+						.randomGet();
+				if (!key) {
+					return;
+				}
+				game.log(player, "将", `#y${lib.jlsg.debuffSkill.getInfo(event, player, name, number).str}`, "改为", `#y${lib.jlsg.debuffSkill.getInfo(null, player, key, 1, nature).str}`);
+				if (key == "damage") {
+					next = player.damage(1, nature);
+				} else if (key == "loseHp") {
+					next = player.loseHp(1);
+				} else if (key == "loseMaxHp") {
+					next = player.loseMaxHp(1);
+				} else if (key == "discard") {
+					next = player.discard(player.getDiscardableCards(player, "he").randomGets(1));
+				} else if (key == "removeSkill") {
+					next = player.removeSkills(player.getSkills(null, false, false).randomGets(1));
+				} else if (key == "disableSkill") {
+					if (!game.getExtensionConfig("极略", "jlsg_disableSkill") && player.storage?.jlsg_qianyuan?.disableSkill === false) {
+						player.storage.jlsg_qianyuan.disableSkill = true;
+					} else {
+						next = player.tempBanSkill(
+							player
+								.getSkills(null, false, false)
+								?.filter(sk => !lib.skill[sk]?.charlotte && !lib.skill[sk]?.persevereSkill)
+								?.randomGets(1)
+						);
+					}
+				} else if (key == "link") {
+					next = player.link();
+				} else if (key == "turnOver") {
+					next = player.turnOver();
+				}
+				return next;
+			},
+			getInfo(event, player, name, num, nature = null) {
+				let key = name || lib.jlsg.debuffSkill.translate[event.name],
+					bool = true,
+					str = "";
+				if (key == "discard") {
+					if (event) {
+						if (event.type != "discard" && event.getParent().name != "discard") {
+							bool = false;
+						} else {
+							let evt = event.getl(player),
+								cards = [];
+							if (evt.hs || evt.es) {
+								cards = evt.hs.concat(evt.es);
+							} else {
+								cards = evt.cards.filter(card => get.owner(card) == player && ["h", "e"].includes(get.position(card)));
+							}
+							bool = cards.length;
+							if (!num) {
+								num = cards.length;
+							}
+						}
+					}
+					str = `弃置${num}张牌`;
+				} else if (key == "removeSkill") {
+					if (event) {
+						bool = event.removeSkill?.length;
+						if (!num) {
+							num = event.removeSkill?.length;
+						}
+						const translation = event.removeSkill?.map(item => get.poptip(item)).join("、");
+						str = `失去${num}个技能：${translation}`;
+					} else {
+						str = `失去${num}个技能`;
+					}
+				} else if (key == "link") {
+					if (event) {
+						bool = !player.isLinked();
+					}
+					str = `横置`;
+				} else if (key == "turnOver") {
+					if (event) {
+						bool = !player.isTurnedOver();
+					}
+					str = `翻面`;
+				} else if (key == "disableSkill") {
+					if (event) {
+						bool = event.num;
+						num = event.num;
+						const translation = event.disableSkills?.map(item => get.poptip(item)).join("、") ?? get.poptip(event.disableSkills);
+						if (event.type !== "addSkillBlocker") {
+							str = `失效${num}个技能：${translation}`;
+						} else {
+							let skill = event.args[0];
+							if (skill.endsWith("_block")) {
+								skill = skill.slice(0, -6);
+							}
+							skill = get.poptip(skill);
+							str = `受${skill}影响失效技能：${translation}`;
+						}
+					} else {
+						str = `失效${num}个技能`;
+					}
+				} else {
+					if (event) {
+						num = event.num;
+					}
+					if (key == "damage") {
+						if (event) {
+							nature = event.nature;
+						}
+						str = `受到${num}点${nature ? get.translation(nature) : ""}伤害`;
+					} else if (key == "loseHp") {
+						str = `失去${num}点体力`;
+					} else if (key == "loseMaxHp") {
+						str = `减少${num}点体力上限`;
+					}
+				}
+				return {
+					bool: bool,
+					num: num,
+					nature: nature,
+					str: str,
+				};
+			},
+		},
+		changeSkillsHandle(player, addSkills, removeSkills, event) {
+			if (event.removeSkill.length) {
+				player.removeSkill(event.removeSkill);
+				game.log(
+					player,
+					"失去了技能",
+					...event.removeSkill
+						.filter(i => i in lib.translate)
+						.map(i => {
+							if (event.popup) {
+								player.popup(i);
+							}
+							return `#g【${get.translation(i)}】`;
+						})
+				);
+			}
+			if (event.addSkill.length) {
+				player.addSkill(event.addSkill);
+				game.log(
+					player,
+					"获得了技能",
+					...event.addSkill
+						.filter(i => i in lib.translate)
+						.map(i => {
+							if (event.popup) {
+								player.popup(i);
+							}
+							return `#g【${get.translation(i)}】`;
+						})
+				);
+			}
+		},
+
+		/**
+		 * 创造一张临时牌（进入弃牌堆后销毁）
+		 * @param { string | null } [name] 要创造的牌名，若为null则随机
+		 * @param { string | undefind } [suit] 此牌的花色
+		 * @param { string | null | undefind } [nature] 此牌为杀的情况下的元素，为null则无元素
+		 * @param { number | null } [number] 此牌的点数
+		 * @param { Boolean | undefined } [isInPile] 该牌是否是牌堆内已有的牌，会覆盖除name以外的参数
+		 * @returns { Card | undefind } 若牌名存在，则返回Card，否则为undefind
+		 */
+		createTempCard(name, suit, nature, number, isInPile) {
+			if (!(name in lib.card) && name !== null) {
+				return;
+			}
+			const list = get.info("jlsg_lingze").typePBTY;
+			if (name === null) {
+				const { PBTY } = list;
+				const numx = Math.random();
+				for (let type in PBTY) {
+					const [min, max] = PBTY[type];
+					if (numx >= min && numx < max) {
+						name = list[type].randomGet()?.[2];
+						break;
+					}
+				}
+				if (!name) {
+					name = lib.inpile.randomGet();
+				}
+			}
+			if (!isInPile) {
+				suit ??= lib.suit.randomGet();
+				if (name == "sha" && !nature && nature !== null && Math.random() < 0.5) {
+					nature = lib.card.sha.nature.randomGet();
+				}
+				number ??= [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].randomGet();
+			} else {
+				const type = get.type2(name, false);
+				const cardInfo = list[type].filter(i => i[2] == name).randomGet();
+				if (!cardInfo?.length) {
+					return;
+				}
+				suit = cardInfo[0];
+				nature = cardInfo[3] || null;
+				number = cardInfo[1];
+			}
+			let card = game.createCard(name, suit, number, nature);
+			if (card) {
+				game.broadcastAll(function (card) {
+					card.destroyed = "discardPile";
+					card.classList.add("jlsg_tempCard-glow");
+				}, card);
+				return card;
+			}
+			return;
+		},
+
+		/**
+		 * 一名角色获得多名角色的牌，可额外包含牌堆和弃牌堆的牌
+		 */
+		async gaincardToOne(event, trigger, player) {
+			if (!player) {
+				return;
+			}
+			event.type = "gain";
+			if (event.animate == "give") {
+				event.visible = true;
+			}
+			//把要获得的有主牌全送到处理区
+			const loseEvent = [];
+			for (const [target, loseCards] of event.lose_list) {
+				const next = target.lose({ cards: loseCards, position: ui.ordering });
+				next.type = "gain";
+				next.forceDie = true;
+				next.getlx = false;
+				loseEvent.push(next);
+			}
+			await Promise.all(loseEvent);
+
+			let delay;
+			//有主牌动画部分
+			const animate = event.animate;
+			switch (animate) {
+				case "give":
+				case "giveAuto": {
+					for (const pair of event.lose_list) {
+						if (get.itemtype(pair[1]) == "card") {
+							pair[1] = [pair[1]];
+						}
+						const shown = pair[1].slice(0);
+						const hidden = [];
+						if (event.animate == "giveAuto") {
+							const evt = event.getl(pair[0]);
+							for (const card of pair[1]) {
+								if (evt.cards2.includes(card)) {
+									shown.remove(card);
+									hidden.push(card);
+								}
+							}
+						}
+						if (shown.length > 0) {
+							pair[0].$give(shown, player);
+						}
+						if (hidden.length > 0) {
+							pair[0].$giveAuto(hidden, player);
+						}
+					}
+					delay = game.delay(0, get.delayx(500, 500));
+					break;
+				}
+				default: {
+					if (typeof animate === "function") {
+						const animateResult = animate(event);
+						if (typeof animateResult === "number") {
+							delay = game.delay(0, get.delayx(animateResult, animateResult));
+						} else {
+							animateResult.finally(() => void game.resume());
+							delay = game.pause();
+						}
+					}
+					break;
+				}
+			}
+			const { cards, otherCards } = event;
+
+			//无主牌动画部分
+			if (otherCards?.length) {
+				const cardPile = [],
+					discardPile = [];
+				for (const card of otherCards) {
+					const position = get.position(card);
+					if (position === "c") {
+						cardPile.push(card);
+					} else if (position === "d") {
+						discardPile.push(card);
+					}
+				}
+				if (cardPile.length) {
+					//若无主牌中有牌堆的牌，则需要进行牌堆更新
+					event.updatePile = true;
+					game.log(player, `从牌堆中获得了${get.cnNumber(cardPile.length)}张牌`);
+					player.$drawAuto(cardPile);
+				}
+				if (discardPile.length) {
+					game.log(player, `从弃牌堆中获得了`, discardPile);
+					player.$gain2(discardPile);
+				}
+			}
+
+			await delay;
+			//一次性获得所有牌
+			await player.gain({ cards, visible: event.visible, gaintag: event.gaintag || [] }).set("getlx", false);
+			await game.delayx();
+			//牌堆更新
+			if (event.updatePile) {
+				game.updateRoundNumber();
+			}
+		},
+	};
+	const keys = Object.keys(jlsg.debuffSkill.translate);
+	for (let item of keys) {
+		for (let time of ["Before", "Begin", "End", "After"]) {
+			jlsg.debuffSkill.translate[item + time] = jlsg.debuffSkill.translate[item];
+		}
+	}
+	lib.jlsg = jlsg;
+	window.jlsg = jlsg;
+
+	//资料卡换肤
+	//因本体资料卡换肤只停留于表层，故这部分无法实现
+	//需本体PR-202507276及以上版本
+	let skinCheck = true,
+		characterSkinList;
+	let [files] = await game.promises.getFileList(`extension/极略`);
+	if (!files.some(file => file == "skin")) {
+		skinCheck = false;
+	} else {
+		let [files] = await game.promises.getFileList(`extension/极略/skin`);
+		if (!files.some(file => file == "image")) {
+			skinCheck = false;
+		}
+	}
+	if (skinCheck) {
+		characterSkinList = (await game.promises.getFileList(`extension/极略/skin/image`))[0];
+	}
+	for (let packName in characters) {
+		const pack = characters[packName];
+		if (skinCheck) {
+			for (let character in pack.character) {
+				if (!characterSkinList.includes(character)) {
+					continue;
+				}
+				pack.character[character].skinPath = `ext:极略/skin/image/${character}/`;
+				/*
+				pack.characterSubstitute ??= {};
+				pack.characterSubstitute[character] ??= [];
+				const [folders, files] = await game.promises.getFileList(`extension/极略/skin/image/${character}`);
+				if (files.length) {
+					for (let file of files) {
+						let skinName = `${character}_${get.pinyin(file.slice(0, -4), false).join("")}`;
+						pack.characterSubstitute[character].push([skinName, [`img:${lib.assetURL}extension/极略/skin/image/${character}/${file}`]]);
+					}
+				}
+				*/
+			}
+		}
+		//导入武将包
+		await game.import("character", function () {
+			return pack;
+		});
+	}
+
+	await game.import("card", function () {
+		lib.config.all.cards.push("jlsg_qs");
+		return cards;
+	});
+}

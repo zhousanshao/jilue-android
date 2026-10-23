@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 金色菱形 + 中央横纹，取“三国杀”令牌意象 -->
+    <path
+        android:fillColor="#d4af37"
+        android:pathData="M54,14 L92,54 L54,94 L16,54 Z" />
+    <path
+        android:fillColor="#10141c"
+        android:pathData="M40,48 L68,48 L68,56 L40,56 Z" />
+    <path
+        android:fillColor="#10141c"
+        android:pathData="M40,60 L68,60 L68,66 L40,66 Z" />
+</vector>

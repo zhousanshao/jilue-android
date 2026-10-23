@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">极略三国</string>
+
+    <string name="settings_title">资源设置</string>
+    <string name="settings_repo_label">GitHub 仓库（资源包所在）</string>
+    <string name="settings_owner_hint">仓库拥有者，如 yourname</string>
+    <string name="settings_repo_hint">仓库名，如 jilue-android</string>
+    <string name="settings_base_label">自定义资源地址（可选）</string>
+    <string name="settings_base_hint">留空则使用 GitHub Release；填则如 https://xxx/</string>
+    <string name="settings_help">资源包（约 1.4 GB）首次会从 GitHub Release 下载并缓存到本机，之后离线可用。修改后点保存，回到首页会自动重新检查。</string>
+    <string name="settings_save">保存并应用</string>
+    <string name="settings_clear">清除已下载资源</string>
+    <string name="settings_saved">已保存</string>
+    <string name="settings_cleared">已清除，下次启动将重新下载</string>
+</resources>

@@ -1,0 +1,56 @@
+name: Build APK
+
+# 触发：打 v* 标签时自动构建并发布 Release；也可在 Actions 页手动触发。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 创建 Release / 上传附件
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---------- 1) JDK 17（AGP 8.5 要求） ----------
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # ---------- 2) Android SDK ----------
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 SDK 组件并同意协议
+        run: |
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          yes | sdkmanager --licenses || true
+
+      # ---------- 3) 构建 APK（debug 可直接侧载安装，无需签名密钥） ----------
+      - name: Build debug APK
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: "8.9"
+          arguments: :app:assembleDebug
+
+      # ---------- 4) 发布到 Release ----------
+      - name: 创建 Release（仅打 tag 时）
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "极略三国 ${{ github.ref_name }}"
+          body: |
+            ## 安装与游玩
+            1. 下载 `app-debug.apk` 安装（Android 需允许「未知来源」安装）。
+            2. **必须**：在本 Release 上传本地已生成的 `assets.zip`（约 1.4 GB，见仓库 README「资源包」一节）以及仓库根目录的 `manifest.json`，App 首次启动才能自动下载资源。
+            3. 首次启动会从本仓库最新 Release 下载 `assets.zip`，请连 Wi-Fi；解压后缓存到本机，之后离线可玩。
+            4. 若资源下载失败，打开 App 右上角「设置」确认/修改资源来源（默认读取本仓库最新 Release）。
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+            manifest.json
